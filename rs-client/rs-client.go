@@ -1,12 +1,12 @@
 package main
 
 import (
-	"github.com/Randomsocks5/Randomsocks5/cipherPipe"
-	"github.com/Randomsocks5/Randomsocks5/tool"
 	randbytes "crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	"flag"
+	"github.com/Randomsocks5/Randomsocks5/cipherPipe"
+	"github.com/Randomsocks5/Randomsocks5/tool"
 	"github.com/codahale/chacha20"
 	"io"
 	"log"
@@ -17,23 +17,22 @@ import (
 )
 
 var (
-	server   string
-	sport   int
-    local string
-    lport   int
+	server string
+	sport  int
+	local  string
+	lport  int
 	passwd string
 )
 
 func init() {
 	flag.StringVar(&server, "server", ConnDefaultServerAddr, "Set Server Addr")
 	flag.IntVar(&sport, "sport", ConnDefaultServerPort, "Set Server Port")
-    flag.StringVar(&local, "local", ConnDefaultLocalAddr, "Set Local Addr")
-    flag.IntVar(&lport, "lport", ConnDefaultLocalPort, "Set Local Port")
+	flag.StringVar(&local, "local", ConnDefaultLocalAddr, "Set Local Addr")
+	flag.IntVar(&lport, "lport", ConnDefaultLocalPort, "Set Local Port")
 	flag.StringVar(&passwd, "passwd", DefaultPasswd, "Set Passwd")
 }
 
-
-func main(){
+func main() {
 	flag.Parse()
 
 	l, err := net.Listen(ConnDefaultType, local+":"+strconv.Itoa(lport))
@@ -67,17 +66,11 @@ func handleRequest(conn net.Conn) {
 		return
 	}
 
-	sconn, err := net.Dial("tcp",server + ":" + strconv.Itoa(sport))
+	sconn, err := net.Dial("tcp", server+":"+strconv.Itoa(sport))
 	if err != nil {
 		log.Println("Create connection failed :", err)
 		return
 	}
-
-	randomDataLen, err := tool.ReadInt(initKey[len(initKey)-2:])
-
-	randomData := make([]byte,randomDataLen)
-	randbytes.Read(randomData)
-	sconn.Write(randomData)
 
 	der, dew := cipherPipe.Pipe(ds)
 	defer der.Close()
@@ -86,13 +79,20 @@ func handleRequest(conn net.Conn) {
 	defer enr.Close()
 	defer enw.Close()
 
+	randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
+	randomData := make([]byte, randomDataLen)
+	randbytes.Read(randomData)
+
 	// Start proxying
 	errorCh := make(chan error, 4)
 	//Read the client data, encryption after sent to the server
-	go proxy(enw, conn,errorCh)
-	go proxy(sconn,enr,errorCh)
+	go proxy(sconn, enr, errorCh)
+	// write random data head
+	enw.Write(randomData)
+	go proxy(enw, conn, errorCh)
+
 	//Receive server data ,decryption after back to the client
-	go proxy(dew, sconn,errorCh)
+	go proxy(dew, sconn, errorCh)
 	go proxy(conn, der, errorCh)
 
 	// Wait
