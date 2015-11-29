@@ -65,14 +65,13 @@ func handleRequest(conn net.Conn) {
 	//Read random head data
 	randomDataLen, err := tool.ReadInt(initKey[len(initKey)-2:])
 	tool.SetReadTimeOut(15, conn)
-	_, err = conn.Read(make([]byte, randomDataLen))
 	if err != nil {
 		log.Println("Error tcp read:  ", err)
 		return
 	}
 
 	finish := make(chan struct{})
-	go proxy(conn, es, ds,finish)
+	go proxy(conn, es, ds,finish,randomDataLen)
 
 	select {
 	case  <- finish:
@@ -80,7 +79,7 @@ func handleRequest(conn net.Conn) {
 	}
 }
 
-func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct{}) {
+func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct{},randomDataLen int) {
 	der, dew := cipherPipe.Pipe(decodeStm)
 	defer der.Close()
 	defer dew.Close()
@@ -89,8 +88,12 @@ func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct
 	defer enw.Close()
 
 	go io.Copy(dew, conn)
+	// read random data head
+	_, err := der.Read(make([]byte, randomDataLen))
 	go io.Copy(conn, enr)
 
-	simpleSocks5.Socks5Handle(der, enw)
-    close(finish)
+	if err == nil {
+		simpleSocks5.Socks5Handle(der, enw)
+	}
+  close(finish)
 }
