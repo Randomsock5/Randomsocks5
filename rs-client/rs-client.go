@@ -85,68 +85,71 @@ func main() {
 }
 
 func handleRequest(conn net.Conn) {
-	defer conn.Close()
+	go func ()  {
+		defer conn.Close()
 
-	// timeCookie := tool.GetTimeCookie()
-	// initKey := sha256.Sum256([]byte(passwd + timeCookie))
-	initKey := sha256.Sum256([]byte(passwd))
-	// nonce := sha512.Sum512_224([]byte(timeCookie + passwd))
-	nonce := sha512.Sum512_224([]byte(passwd))
+		// timeCookie := tool.GetTimeCookie()
+		// initKey := sha256.Sum256([]byte(passwd + timeCookie))
+		initKey := sha256.Sum256([]byte(passwd))
+		// nonce := sha512.Sum512_224([]byte(timeCookie + passwd))
+		nonce := sha512.Sum512_224([]byte(passwd))
 
-	es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
-	ds, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
-	if err != nil {
-		log.Println("Error chacha20 init:  ", err)
-		return
-	}
-
-	pconn, err := net.Dial("tcp", server+":"+strconv.Itoa(sport))
-	if err != nil {
-		log.Println("Create connection failed :", err)
-		return
-	}
-	defer pconn.Close()
-
-	der, dew := cipherPipe.Pipe(ds)
-	defer der.Close()
-	defer dew.Close()
-	enr, enw := cipherPipe.Pipe(es)
-	defer enr.Close()
-	defer enw.Close()
-
-	randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
-	randomData := make([]byte, randomDataLen)
-	randbytes.Read(randomData)
-
-	// Start proxying
-	errorCh := make(chan error, 4)
-	//Read the client data, encryption after sent to the server
-	go proxy(pconn, enr, errorCh)
-
-	// write random data head
-	var wi = 0
-	for wi < randomDataLen {
-		w, err := enw.Write(randomData[wi:])
+		es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
+		ds, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
 		if err != nil {
+			log.Println("Error chacha20 init:  ", err)
 			return
 		}
-		wi += w
-	}
 
-	go proxy(enw, conn, errorCh)
-
-	//Receive server data ,decryption after back to the client
-	go proxy(dew, pconn, errorCh)
-	go proxy(conn, der, errorCh)
-
-	// Wait
-	select {
-	case e := <-errorCh:
-		if e != nil {
-			log.Println(e)
+		pconn, err := net.Dial("tcp", server+":"+strconv.Itoa(sport))
+		if err != nil {
+			log.Println("Create connection failed :", err)
+			return
 		}
-		return
-	}
+		defer pconn.Close()
+
+		der, dew := cipherPipe.Pipe(ds)
+		defer der.Close()
+		defer dew.Close()
+		enr, enw := cipherPipe.Pipe(es)
+		defer enr.Close()
+		defer enw.Close()
+
+		randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
+		randomDataLen = (randomDataLen + 3)* 16
+		randomData := make([]byte, randomDataLen)
+		randbytes.Read(randomData)
+
+		// Start proxying
+		errorCh := make(chan error, 4)
+		//Read the client data, encryption after sent to the server
+		go proxy(pconn, enr, errorCh)
+
+		// write random data head
+		var wi = 0
+		for wi < randomDataLen {
+			w, err := enw.Write(randomData[wi:])
+			if err != nil {
+				return
+			}
+			wi += w
+		}
+
+		go proxy(enw, conn, errorCh)
+
+		//Receive server data ,decryption after back to the client
+		go proxy(dew, pconn, errorCh)
+		go proxy(conn, der, errorCh)
+
+		// Wait
+		select {
+		case e := <-errorCh:
+			if e != nil {
+				log.Println(e)
+			}
+			return
+		}
+	}()
 }
 
 func proxy(dst io.Writer, src io.Reader, errorCh chan error) {
