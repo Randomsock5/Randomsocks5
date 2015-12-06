@@ -5,7 +5,7 @@ import(
     "bufio"
     "log"
     "os"
-    "github.com/Randomsocks5/Randomsocks5/simpleSocks5"
+    "github.com/Randomsock5/Randomsocks5/simpleSocks5"
 )
 
 func main (){

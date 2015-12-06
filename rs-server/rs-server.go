@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/Randomsocks5/Randomsocks5/cipherPipe"
-	"github.com/Randomsocks5/Randomsocks5/simpleSocks5"
-	"github.com/Randomsocks5/Randomsocks5/tool"
+	"github.com/Randomsock5/Randomsocks5/cipherPipe"
+	"github.com/Randomsock5/Randomsocks5/simpleSocks5"
+	"github.com/Randomsock5/Randomsocks5/tool"
 	"crypto/cipher"
 	"crypto/sha256"
 	"crypto/sha512"
