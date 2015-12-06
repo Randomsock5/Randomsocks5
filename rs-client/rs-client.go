@@ -51,7 +51,7 @@ func main() {
 		}
 
 		s := string(b[:])
-		s = strings.Replace(s, ReplaceFlag, "PROXY "+local+":"+strconv.Itoa(lport)+";", 1)
+		s = strings.Replace(s, ReplaceFlag, "SOCKS5 "+local+":"+strconv.Itoa(lport)+";", 1)
 
 		mux := http.NewServeMux()
 		mux.HandleFunc("/pac", func(w http.ResponseWriter, r *http.Request) {
