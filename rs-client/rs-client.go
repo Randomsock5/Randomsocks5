@@ -9,32 +9,63 @@ import (
 	"github.com/Randomsocks5/Randomsocks5/tool"
 	"github.com/codahale/chacha20"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 var (
-	server string
-	sport  int
-	local  string
-	lport  int
-	passwd string
+	server   string
+	sport    int
+	local    string
+	lport    int
+	passwd   string
+	pac_port int
+	pac_file string
 )
 
 func init() {
-	flag.StringVar(&server, "server", ConnDefaultServerAddr, "Set Server Addr")
-	flag.IntVar(&sport, "sport", ConnDefaultServerPort, "Set Server Port")
-	flag.StringVar(&local, "local", ConnDefaultLocalAddr, "Set Local Addr")
-	flag.IntVar(&lport, "lport", ConnDefaultLocalPort, "Set Local Port")
-	flag.StringVar(&passwd, "passwd", DefaultPasswd, "Set Passwd")
+	flag.StringVar(&server, "server", ConnDefaultServerAddr, "Set server addr")
+	flag.IntVar(&sport, "sport", ConnDefaultServerPort, "Set server port")
+	flag.StringVar(&local, "local", ConnDefaultLocalAddr, "Set local addr")
+	flag.IntVar(&lport, "lport", ConnDefaultLocalPort, "Set local port")
+	flag.StringVar(&pac_file, "pac", DefaultPACFilePath, "Set pac path")
+	flag.IntVar(&pac_port, "pac_port", ConnDefaultPACPort, "Set pac port")
+	flag.StringVar(&passwd, "passwd", DefaultPasswd, "Set passwd")
 }
 
 func main() {
 	flag.Parse()
 
+	//PAC
+	if exist(pac_file) {
+		b, err := ioutil.ReadFile(pac_file)
+		if err != nil {
+			log.Println("Can not read file: " + pac_file)
+			os.Exit(1)
+		}
+
+		s := string(b[:])
+		s = strings.Replace(s, ReplaceFlag, "PROXY "+local+":"+strconv.Itoa(lport)+";", 1)
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("/pac", func(w http.ResponseWriter, r *http.Request) {
+			io.WriteString(w, s)
+		})
+		go http.ListenAndServe(":"+strconv.Itoa(pac_port), mux)
+
+		log.Println("pac uri: http://127.0.0.1" + ":" + strconv.Itoa(pac_port) + "/pac")
+	} else {
+		log.Println("Can not find file: " + pac_file)
+		os.Exit(1)
+	}
+
+	//Proxy
 	l, err := net.Listen(ConnDefaultType, local+":"+strconv.Itoa(lport))
 	if err != nil {
 		log.Println("Error listening: ", err)
@@ -56,9 +87,12 @@ func main() {
 func handleRequest(conn net.Conn) {
 	defer conn.Close()
 
-	timeCookie := tool.GetTimeCookie()
-	initKey := sha256.Sum256([]byte(passwd + timeCookie))
-	nonce := sha512.Sum512_224([]byte(timeCookie + passwd))
+	// timeCookie := tool.GetTimeCookie()
+	// initKey := sha256.Sum256([]byte(passwd + timeCookie))
+	initKey := sha256.Sum256([]byte(passwd))
+	// nonce := sha512.Sum512_224([]byte(timeCookie + passwd))
+	nonce := sha512.Sum512_224([]byte(passwd))
+
 	es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
 	ds, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
 	if err != nil {
@@ -66,11 +100,12 @@ func handleRequest(conn net.Conn) {
 		return
 	}
 
-	sconn, err := net.Dial("tcp", server+":"+strconv.Itoa(sport))
+	pconn, err := net.Dial("tcp", server+":"+strconv.Itoa(sport))
 	if err != nil {
 		log.Println("Create connection failed :", err)
 		return
 	}
+	defer pconn.Close()
 
 	der, dew := cipherPipe.Pipe(ds)
 	defer der.Close()
@@ -86,13 +121,22 @@ func handleRequest(conn net.Conn) {
 	// Start proxying
 	errorCh := make(chan error, 4)
 	//Read the client data, encryption after sent to the server
-	go proxy(sconn, enr, errorCh)
+	go proxy(pconn, enr, errorCh)
+
 	// write random data head
-	enw.Write(randomData)
+	var wi = 0
+	for wi < randomDataLen {
+		w, err := enw.Write(randomData[wi:])
+		if err != nil {
+			return
+		}
+		wi += w
+	}
+
 	go proxy(enw, conn, errorCh)
 
 	//Receive server data ,decryption after back to the client
-	go proxy(dew, sconn, errorCh)
+	go proxy(dew, pconn, errorCh)
 	go proxy(conn, der, errorCh)
 
 	// Wait
@@ -109,4 +153,9 @@ func proxy(dst io.Writer, src io.Reader, errorCh chan error) {
 	_, err := io.Copy(dst, src)
 	time.Sleep(10 * time.Millisecond)
 	errorCh <- err
+}
+
+func exist(filepath string) bool {
+	_, err := os.Stat(filepath)
+	return err == nil || os.IsExist(err)
 }

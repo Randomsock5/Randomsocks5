@@ -52,9 +52,12 @@ func main() {
 func handleRequest(conn net.Conn) {
 	defer conn.Close()
 
-	timeCookie := tool.GetTimeCookie()
-	initKey := sha256.Sum256([]byte(passwd + timeCookie))
-	nonce := sha512.Sum512_224([]byte(timeCookie + passwd))
+	// timeCookie := tool.GetTimeCookie()
+	// initKey := sha256.Sum256([]byte(passwd + timeCookie))
+	initKey := sha256.Sum256([]byte(passwd))
+	// nonce := sha512.Sum512_224([]byte(timeCookie + passwd))
+	nonce := sha512.Sum512_224([]byte(passwd))
+
 	es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
 	ds, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
 	if err != nil {
@@ -62,16 +65,12 @@ func handleRequest(conn net.Conn) {
 		return
 	}
 
-	//Read random head data
-	randomDataLen, err := tool.ReadInt(initKey[len(initKey)-2:])
+	//random data head length
+	randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
 	tool.SetReadTimeOut(15, conn)
-	if err != nil {
-		log.Println("Error tcp read:  ", err)
-		return
-	}
 
 	finish := make(chan struct{})
-	go proxy(conn, es, ds,finish,randomDataLen)
+	go proxy(conn, es, ds, finish, randomDataLen)
 
 	select {
 	case  <- finish:
@@ -79,7 +78,7 @@ func handleRequest(conn net.Conn) {
 	}
 }
 
-func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct{},randomDataLen int) {
+func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct{}, randomDataLen int) {
 	der, dew := cipherPipe.Pipe(decodeStm)
 	defer der.Close()
 	defer dew.Close()
@@ -88,12 +87,21 @@ func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct
 	defer enw.Close()
 
 	go io.Copy(dew, conn)
+
 	// read random data head
-	_, err := der.Read(make([]byte, randomDataLen))
+	var ri = 0
+	for ri < randomDataLen {
+		var randomdata = make([]byte, randomDataLen - ri)
+		r, err := der.Read(randomdata)
+		if err != nil {
+			close(finish)
+			return
+		}
+		ri += r
+	}
+
 	go io.Copy(conn, enr)
 
-	if err == nil {
-		simpleSocks5.Socks5Handle(der, enw)
-	}
+	simpleSocks5.Socks5Handle(der, enw)
   close(finish)
 }

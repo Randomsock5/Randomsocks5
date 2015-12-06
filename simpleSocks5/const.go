@@ -1,7 +1,7 @@
 package simpleSocks5
 
 const (
-	noAuth          = uint8(0)
+	noAuth        = uint8(0)
 	socks5Version = uint8(5)
 )
 
