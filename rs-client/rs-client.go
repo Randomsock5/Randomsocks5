@@ -89,7 +89,7 @@ func handleRequest(conn net.Conn) {
 		defer conn.Close()
 
 		timeCookie := tool.GetTimeCookie()
-		initKey := sha256.Sum256([]byte(passwd))
+		initKey := sha256.Sum256([]byte(passwd + timeCookie))
 		nonce := sha512.Sum512_224([]byte(timeCookie + passwd))
 
 		es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])

@@ -40,7 +40,8 @@ func WriteInt(i int16) ([]byte, error) {
 func GetTimeCookie()string{
 	now := time.Now()
 	year,mon,day := now.UTC().Date()
-	return strconv.Itoa(year)+mon.String()+strconv.Itoa(day)
+	hour := now.UTC().Hour()
+	return strconv.Itoa(year)+mon.String()+strconv.Itoa(day)+strconv.Itoa(hour)
 }
 
 func SetReadTimeOut(t int, conn net.Conn) {
