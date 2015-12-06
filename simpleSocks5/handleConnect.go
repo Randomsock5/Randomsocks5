@@ -29,7 +29,7 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 
 	// Send success
 	local := target.LocalAddr().(*net.TCPAddr)
-	bind := AddrSpec{IP: local.IP, Port: local.Port}
+	bind  := AddrSpec{IP: local.IP, Port: local.Port}
 	if err := sendReply(wd, successReply, &bind); err != nil {
 		return fmt.Errorf("Failed to send reply: %v", err)
 	}

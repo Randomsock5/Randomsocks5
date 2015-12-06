@@ -104,7 +104,6 @@ func handleRequest(conn net.Conn) {
 			log.Println("Create connection failed :", err)
 			return
 		}
-		tool.SetReadTimeOut(120, pconn)
 
 		defer pconn.Close()
 

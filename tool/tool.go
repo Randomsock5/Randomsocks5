@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/rand"
-	"net"
 	"time"
 	"strconv"
 )
@@ -44,9 +43,9 @@ func GetTimeCookie()string{
 	return strconv.Itoa(year)+mon.String()+strconv.Itoa(day)+strconv.Itoa(hour)
 }
 
-func SetReadTimeOut(t int, conn net.Conn) {
-	conn.SetReadDeadline(time.Now().Add(time.Duration(t) * time.Second))
-}
+// func SetReadTimeOut(t int, conn net.Conn) {
+// 	conn.SetReadDeadline(time.Now().Add(time.Duration(t) * time.Second))
+// }
 
 func GetSmoke() []byte {
 	slen := rand.Int31n(128)

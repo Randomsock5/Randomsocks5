@@ -67,7 +67,6 @@ func handleRequest(conn net.Conn) {
 		//random data head length
 		randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
 		randomDataLen = randomDataLen + 3
-		tool.SetReadTimeOut(120, conn)
 
 		finish := make(chan struct{})
 		go proxy(conn, es, ds, finish, randomDataLen)
