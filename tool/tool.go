@@ -2,10 +2,8 @@ package tool
 
 import (
 	"bytes"
-	randbytes "crypto/rand"
 	"encoding/binary"
 	"errors"
-	"math/rand"
 	"time"
 	"strconv"
 )
@@ -46,10 +44,3 @@ func GetTimeCookie()string{
 // func SetReadTimeOut(t int, conn net.Conn) {
 // 	conn.SetReadDeadline(time.Now().Add(time.Duration(t) * time.Second))
 // }
-
-func GetSmoke() []byte {
-	slen := rand.Int31n(128)
-	smoke := make([]byte, slen)
-	randbytes.Read(smoke)
-	return smoke
-}

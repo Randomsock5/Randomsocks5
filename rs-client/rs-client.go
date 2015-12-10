@@ -90,7 +90,7 @@ func handleRequest(conn net.Conn) {
 
 		timeCookie := tool.GetTimeCookie()
 		initKey := sha256.Sum256([]byte(passwd + timeCookie))
-		nonce := sha512.Sum512_224([]byte(timeCookie + passwd))
+		nonce := sha512.Sum512([]byte(timeCookie + passwd))
 
 		es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
 		ds, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
@@ -115,7 +115,9 @@ func handleRequest(conn net.Conn) {
 		defer enw.Close()
 
 		randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
-		randomDataLen = randomDataLen + 3
+		if randomDataLen < 32767 {
+			randomDataLen = randomDataLen + 64
+		}
 		randomData := make([]byte, randomDataLen)
 		randbytes.Read(randomData)
 
