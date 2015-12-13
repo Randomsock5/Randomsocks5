@@ -116,8 +116,9 @@ func handleRequest(conn net.Conn) {
 
 		randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
 		if randomDataLen < 32767 {
-			randomDataLen = randomDataLen + 64
+			randomDataLen = randomDataLen + 2984
 		}
+
 		randomData := make([]byte, randomDataLen)
 		randbytes.Read(randomData)
 
