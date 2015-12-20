@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"flag"
+	"golang.org/x/crypto/poly1305"
 	"github.com/Randomsock5/Randomsocks5/cipherPipe"
 	"github.com/Randomsock5/Randomsocks5/tool"
 	"github.com/codahale/chacha20"
@@ -16,7 +17,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var (
@@ -119,8 +119,12 @@ func handleRequest(conn net.Conn) {
 			randomDataLen = randomDataLen + 2984
 		}
 
-		randomData := make([]byte, randomDataLen)
+		randomData := make([]byte, randomDataLen + poly1305.TagSize)
 		randbytes.Read(randomData)
+
+		var mac [poly1305.TagSize]byte
+		poly1305.Sum(&mac, randomData[:randomDataLen], &initKey)
+		copy(randomData[randomDataLen:],mac[:])
 
 		// Start proxying
 		errorCh := make(chan error, 4)
@@ -129,7 +133,7 @@ func handleRequest(conn net.Conn) {
 
 		// write random data head
 		var wi = 0
-		for wi < randomDataLen {
+		for wi < (randomDataLen + poly1305.TagSize) {
 			w, err := enw.Write(randomData[wi:])
 			if err != nil {
 				return
@@ -156,7 +160,6 @@ func handleRequest(conn net.Conn) {
 
 func proxy(dst io.Writer, src io.Reader, errorCh chan error) {
 	_, err := io.Copy(dst, src)
-	time.Sleep(10 * time.Millisecond)
 	errorCh <- err
 }
 

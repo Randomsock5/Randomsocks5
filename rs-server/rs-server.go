@@ -4,6 +4,7 @@ import (
 	"github.com/Randomsock5/Randomsocks5/cipherPipe"
 	"github.com/Randomsock5/Randomsocks5/simpleSocks5"
 	"github.com/Randomsock5/Randomsocks5/tool"
+	"golang.org/x/crypto/poly1305"
 	"crypto/cipher"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -71,7 +72,7 @@ func handleRequest(conn net.Conn) {
 		}
 
 		finish := make(chan struct{})
-		go proxy(conn, es, ds, finish, randomDataLen)
+		go proxy(conn, es, ds, finish, randomDataLen, &initKey)
 
 		select {
 		case  <- finish:
@@ -80,7 +81,7 @@ func handleRequest(conn net.Conn) {
 	}()
 }
 
-func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct{}, randomDataLen int) {
+func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct{}, randomDataLen int, key *[32]byte) {
 	der, dew := cipherPipe.Pipe(decodeStm)
 	defer der.Close()
 	defer dew.Close()
@@ -92,14 +93,23 @@ func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct
 
 	// read random data head
 	var ri = 0
-	for ri < randomDataLen {
-		var randomdata = make([]byte, randomDataLen - ri)
-		r, err := der.Read(randomdata)
+	var randomdata = make([]byte, randomDataLen + poly1305.TagSize)
+	for ri < (randomDataLen + poly1305.TagSize) {
+		r, err := der.Read(randomdata[ri:])
 		if err != nil {
 			close(finish)
 			return
 		}
 		ri += r
+	}
+
+	var mac [16]byte
+	copy(mac[:],randomdata[randomDataLen:])
+	if !poly1305.Verify(&mac, randomdata[:randomDataLen], key) {
+		log.Println("poly1305 mac verify error")
+		log.Println(randomdata[randomDataLen:])
+		close(finish)
+		return
 	}
 
 	go io.Copy(conn, enr)
