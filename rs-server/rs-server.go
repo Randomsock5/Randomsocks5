@@ -107,7 +107,6 @@ func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct
 	copy(mac[:],randomdata[randomDataLen:])
 	if !poly1305.Verify(&mac, randomdata[:randomDataLen], key) {
 		log.Println("poly1305 mac verify error")
-		log.Println(randomdata[randomDataLen:])
 		close(finish)
 		return
 	}
