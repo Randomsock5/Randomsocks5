@@ -6,7 +6,7 @@ import (
 
 const (
 	ConnDefaultAddr string = ""
-	ConnDefaultPort int    = 9500
+	ConnDefaultPort int    = 3724
 	ConnDefaultType string = "tcp"
 	DefaultPasswd   string = "hello world"
 	KeySize         int    = chacha20.KeySize

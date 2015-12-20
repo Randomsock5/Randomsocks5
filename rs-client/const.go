@@ -6,7 +6,7 @@ import (
 
 const (
 	ConnDefaultServerAddr string = "127.0.0.2"
-	ConnDefaultServerPort int    = 9500
+	ConnDefaultServerPort int    = 3724
 	ConnDefaultLocalAddr  string = "127.0.0.1"
 	ConnDefaultLocalPort  int    = 9500
 	ConnDefaultPACPort    int    = 9501
