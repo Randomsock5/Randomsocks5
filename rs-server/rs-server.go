@@ -76,6 +76,7 @@ func handleRequest(conn net.Conn) {
 
 		select {
 		case  <- finish:
+			close(finish)
 			return
 		}
 	}()
@@ -97,7 +98,7 @@ func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct
 	for ri < (randomDataLen + poly1305.TagSize) {
 		r, err := der.Read(randomdata[ri:])
 		if err != nil {
-			close(finish)
+			finish<-struct{}{}
 			return
 		}
 		ri += r
@@ -107,12 +108,12 @@ func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream,finish chan struct
 	copy(mac[:],randomdata[randomDataLen:])
 	if !poly1305.Verify(&mac, randomdata[:randomDataLen], key) {
 		log.Println("poly1305 mac verify error")
-		close(finish)
+		finish<-struct{}{}
 		return
 	}
 
 	go io.Copy(conn, enr)
 
 	simpleSocks5.Socks5Handle(der, enw)
-  close(finish)
+  finish<-struct{}{}
 }

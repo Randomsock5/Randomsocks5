@@ -35,23 +35,21 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 	}
 
 	// Start proxying
-	errorCh := make(chan error, 2)
-	go proxy( target, rd, errorCh)
-	go proxy( wd, target, errorCh)
+	finish := make(chan struct{})
+	go proxy( target, rd, finish)
+	go proxy( wd, target, finish)
 
 	// Wait
 	select {
-	case e := <-errorCh:
-		return e
+	case <-finish:
+		close(finish)
+		return nil;
 	}
 }
 
-// proxy is used to suffle data from src to destination, and sends errors
-// down a dedicated channel
-func proxy(dst io.Writer, src io.Reader, errorCh chan error) {
+func proxy(dst io.Writer, src io.Reader, finish chan struct{}) {
 	// Copy
 	_, err := io.Copy(dst, src)
-
-	// Send any errors
-	errorCh <- err
+	fmt.Errorf("error : %v", err)
+	finish<-struct{}{}
 }

@@ -127,9 +127,9 @@ func handleRequest(conn net.Conn) {
 		copy(randomData[randomDataLen:],mac[:])
 
 		// Start proxying
-		errorCh := make(chan error, 4)
+		finish := make(chan error)
 		//Read the client data, encryption after sent to the server
-		go proxy(pconn, enr, errorCh)
+		go proxy(pconn, enr, finish)
 
 		// write random data head
 		var wi = 0
@@ -141,26 +141,27 @@ func handleRequest(conn net.Conn) {
 			wi += w
 		}
 
-		go proxy(enw, conn, errorCh)
+		go proxy(enw, conn, finish)
 
 		//Receive server data ,decryption after back to the client
-		go proxy(dew, pconn, errorCh)
-		go proxy(conn, der, errorCh)
+		go proxy(dew, pconn, finish)
+		go proxy(conn, der, finish)
 
 		// Wait
 		select {
-		case e := <-errorCh:
+		case e := <-finish:
 			if e != nil {
 				log.Println(e)
 			}
+			close(finish)
 			return
 		}
 	}()
 }
 
-func proxy(dst io.Writer, src io.Reader, errorCh chan error) {
+func proxy(dst io.Writer, src io.Reader, finish chan error) {
 	_, err := io.Copy(dst, src)
-	errorCh <- err
+	finish <- err
 }
 
 func exist(filepath string) bool {
