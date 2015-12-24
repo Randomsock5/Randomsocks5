@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"flag"
-	"golang.org/x/crypto/poly1305"
 	"github.com/Randomsock5/Randomsocks5/cipherPipe"
 	"github.com/Randomsock5/Randomsocks5/tool"
 	"github.com/codahale/chacha20"
+	"golang.org/x/crypto/poly1305"
 	"io"
 	"io/ioutil"
 	"log"
@@ -86,71 +86,68 @@ func main() {
 }
 
 func handleRequest(conn net.Conn) {
-	go func ()  {
-		defer conn.Close()
+	defer conn.Close()
 
-		timeCookie := tool.GetTimeCookie()
-		initKey := sha256.Sum256([]byte(passwd + timeCookie))
-		nonce := sha512.Sum512([]byte(timeCookie + passwd))
+	timeCookie := tool.GetTimeCookie()
+	initKey := sha256.Sum256([]byte(passwd + timeCookie))
+	nonce := sha512.Sum512([]byte(timeCookie + passwd))
 
-		es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
-		ds, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
+	es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
+	ds, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
+	if err != nil {
+		log.Println("Error chacha20 init:  ", err)
+		return
+	}
+
+	pconn, err := net.Dial("tcp", server+":"+strconv.Itoa(sport))
+	if err != nil {
+		log.Println("Create connection failed :", err)
+		return
+	}
+	defer pconn.Close()
+
+	der, dew := cipherPipe.Pipe(ds)
+	defer der.Close()
+	defer dew.Close()
+	enr, enw := cipherPipe.Pipe(es)
+	defer enr.Close()
+	defer enw.Close()
+
+	randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
+	if randomDataLen < 32767 {
+		randomDataLen = randomDataLen + 2984
+	}
+
+	randomData := make([]byte, randomDataLen+poly1305.TagSize)
+	randbytes.Read(randomData)
+
+	var mac [poly1305.TagSize]byte
+	poly1305.Sum(&mac, randomData[:randomDataLen], &initKey)
+	copy(randomData[randomDataLen:], mac[:])
+
+	// Start proxying
+	var finish sync.WaitGroup
+	finish.Add(4)
+	//Read the client data, encryption after sent to the server
+	go proxy(pconn, enr, finish)
+	// write random data head
+	var wi = 0
+	for wi < (randomDataLen + poly1305.TagSize) {
+		w, err := enw.Write(randomData[wi:])
 		if err != nil {
-			log.Println("Error chacha20 init:  ", err)
 			return
 		}
+		wi += w
+	}
 
-		pconn, err := net.Dial("tcp", server+":"+strconv.Itoa(sport))
-		if err != nil {
-			log.Println("Create connection failed :", err)
-			return
-		}
+	go proxy(enw, conn, finish)
 
-		defer pconn.Close()
+	//Receive server data ,decryption after back to the client
+	go proxy(dew, pconn, finish)
+	go proxy(conn, der, finish)
 
-		der, dew := cipherPipe.Pipe(ds)
-		defer der.Close()
-		defer dew.Close()
-		enr, enw := cipherPipe.Pipe(es)
-		defer enr.Close()
-		defer enw.Close()
-
-		randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
-		if randomDataLen < 32767 {
-			randomDataLen = randomDataLen + 2984
-		}
-
-		randomData := make([]byte, randomDataLen + poly1305.TagSize)
-		randbytes.Read(randomData)
-
-		var mac [poly1305.TagSize]byte
-		poly1305.Sum(&mac, randomData[:randomDataLen], &initKey)
-		copy(randomData[randomDataLen:],mac[:])
-
-		// Start proxying
-		var finish sync.WaitGroup
-		finish.Add(4)
-		//Read the client data, encryption after sent to the server
-		go proxy(pconn, enr, finish)
-		// write random data head
-		var wi = 0
-		for wi < (randomDataLen + poly1305.TagSize) {
-			w, err := enw.Write(randomData[wi:])
-			if err != nil {
-				return
-			}
-			wi += w
-		}
-
-		go proxy(enw, conn, finish)
-
-		//Receive server data ,decryption after back to the client
-		go proxy(dew, pconn, finish)
-		go proxy(conn, der, finish)
-
-		// Wait
-		finish.Wait()
-	}()
+	// Wait
+	finish.Wait()
 }
 
 func proxy(dst io.Writer, src io.Reader, finish sync.WaitGroup) {

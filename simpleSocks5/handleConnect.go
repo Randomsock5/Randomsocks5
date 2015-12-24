@@ -26,6 +26,7 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 		}
 		return fmt.Errorf("Connect to %v failed: %v", dest, err)
 	}
+	target.SetKeepAlive(false)
 	defer target.Close()
 
 	// Send success
