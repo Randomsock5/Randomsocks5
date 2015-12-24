@@ -17,6 +17,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var (
@@ -127,10 +128,10 @@ func handleRequest(conn net.Conn) {
 		copy(randomData[randomDataLen:],mac[:])
 
 		// Start proxying
-		finish := make(chan error)
+		var finish sync.WaitGroup
+		finish.Add(4)
 		//Read the client data, encryption after sent to the server
 		go proxy(pconn, enr, finish)
-
 		// write random data head
 		var wi = 0
 		for wi < (randomDataLen + poly1305.TagSize) {
@@ -148,20 +149,13 @@ func handleRequest(conn net.Conn) {
 		go proxy(conn, der, finish)
 
 		// Wait
-		select {
-		case e := <-finish:
-			if e != nil {
-				log.Println(e)
-			}
-			close(finish)
-			return
-		}
+		finish.Wait()
 	}()
 }
 
-func proxy(dst io.Writer, src io.Reader, finish chan error) {
-	_, err := io.Copy(dst, src)
-	finish <- err
+func proxy(dst io.Writer, src io.Reader, finish sync.WaitGroup) {
+	io.Copy(dst, src)
+	finish.Done()
 }
 
 func exist(filepath string) bool {

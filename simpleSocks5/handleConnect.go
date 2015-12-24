@@ -5,6 +5,7 @@ import (
 	"net"
 	"io"
 	"strings"
+	"sync"
 )
 
 // handleConnect is used to handle a connect command
@@ -35,21 +36,19 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 	}
 
 	// Start proxying
-	finish := make(chan struct{})
+	var finish sync.WaitGroup
+	finish.Add(2)
 	go proxy( target, rd, finish)
 	go proxy( wd, target, finish)
 
 	// Wait
-	select {
-	case <-finish:
-		close(finish)
-		return nil;
-	}
+	finish.Wait()
+	return nil
 }
 
-func proxy(dst io.Writer, src io.Reader, finish chan struct{}) {
+func proxy(dst io.Writer, src io.Reader, finish sync.WaitGroup) {
 	// Copy
 	_, err := io.Copy(dst, src)
 	fmt.Errorf("error : %v", err)
-	finish<-struct{}{}
+	finish.Done()
 }
