@@ -151,7 +151,7 @@ func handleRequest(conn net.Conn) {
 	done.Wait()
 }
 
-func proxy(dst io.WriteCloser, src io.Reader, done sync.WaitGroup,finish chan bool) {
+func proxy(dst io.Writer , src io.Reader, done sync.WaitGroup,finish chan bool) {
 	done.Add(1)
 	copyeof := make(chan struct{})
 	go func ()  {

@@ -48,14 +48,14 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 	return nil
 }
 
-func proxy(dst io.WriteCloser, src io.Reader, done sync.WaitGroup, finish chan bool) {
+func proxy(dst io.Writer, src io.Reader, done sync.WaitGroup, finish chan bool) {
 	done.Add(1)
 	copyeof := make(chan struct{})
 	go func ()  {
 		io.Copy(dst, src)
 		close(copyeof)
 	}()
-		
+
 	select {
 	case <- copyeof:
 	case <- finish:
