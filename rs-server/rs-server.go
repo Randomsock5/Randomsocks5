@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"time"
 )
 
 var (
@@ -71,6 +72,7 @@ func handleRequest(conn net.Conn) {
 	}
 
 	proxy(conn, es, ds, randomDataLen, &initKey)
+	conn.SetDeadline(time.Now())
 }
 
 func proxy(conn net.Conn, encodeStm, decodeStm cipher.Stream, randomDataLen int, key *[32]byte) {

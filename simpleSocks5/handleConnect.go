@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"time"
 )
 
 // handleConnect is used to handle a connect command
@@ -48,6 +49,8 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 
 	// Wait
 	done.Wait()
+	target.SetDeadline(time.Now())
+
 	return nil
 }
 

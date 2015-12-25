@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -104,6 +105,7 @@ func handleRequest(conn net.Conn) {
 		log.Println("Create connection failed :", err)
 		return
 	}
+	defer pconn.Close()
 
 	der, dew := cipherPipe.Pipe(ds)
 	defer der.Close()
@@ -151,6 +153,9 @@ func handleRequest(conn net.Conn) {
 
 	// Wait
 	done.Wait()
+
+	conn.SetDeadline(time.Now())
+	pconn.SetDeadline(time.Now())
 }
 
 func proxy(dst io.Writer , src io.Reader, done sync.WaitGroup,finish chan bool) {
@@ -166,6 +171,7 @@ func proxy(dst io.Writer , src io.Reader, done sync.WaitGroup,finish chan bool) 
 	}
 
 	finish <- true
+
 	done.Done()
 }
 
