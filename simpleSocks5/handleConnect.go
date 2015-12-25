@@ -39,6 +39,7 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 	// Start proxying
 	var done sync.WaitGroup
 	finish := make(chan bool,4)
+	defer close(finish)
 
 	go proxy( target, rd, done, finish)
 	go proxy( wd, target, done, finish)
