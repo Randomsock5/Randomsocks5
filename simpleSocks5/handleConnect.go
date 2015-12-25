@@ -37,9 +37,11 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 	}
 
 	// Start proxying
-	var done sync.WaitGroup
 	finish := make(chan bool,4)
 	defer close(finish)
+
+	var done sync.WaitGroup
+	done.Add(2)
 
 	go proxy( target, rd, done, finish)
 	go proxy( wd, target, done, finish)
@@ -50,7 +52,6 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 }
 
 func proxy(dst io.Writer, src io.Reader, done sync.WaitGroup, finish chan bool) {
-	done.Add(1)
 	copyeof := make(chan struct{})
 	go func ()  {
 		io.Copy(dst, src)

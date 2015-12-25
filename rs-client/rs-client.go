@@ -125,9 +125,11 @@ func handleRequest(conn net.Conn) {
 	copy(randomData[randomDataLen:], mac[:])
 
 	// Start proxying
-	var done sync.WaitGroup
 	finish := make(chan bool,4)
 	defer close(finish)
+
+	var done sync.WaitGroup
+	done.Add(4)
 
 	//Read the client data, encryption after sent to the server
 	go proxy(pconn, enr, done, finish)
@@ -152,7 +154,6 @@ func handleRequest(conn net.Conn) {
 }
 
 func proxy(dst io.Writer , src io.Reader, done sync.WaitGroup,finish chan bool) {
-	done.Add(1)
 	copyeof := make(chan struct{})
 	go func ()  {
 		io.Copy(dst, src)
