@@ -1,15 +1,15 @@
 package main
 
 import (
-	"github.com/Randomsock5/Randomsocks5/cipherPipe"
-	"github.com/Randomsock5/Randomsocks5/simpleSocks5"
-	"github.com/Randomsock5/Randomsocks5/tool"
-	"golang.org/x/crypto/poly1305"
 	"crypto/cipher"
 	"crypto/sha256"
 	"crypto/sha512"
 	"flag"
+	"github.com/Randomsock5/Randomsocks5/cipherPipe"
+	"github.com/Randomsock5/Randomsocks5/simpleSocks5"
+	"github.com/Randomsock5/Randomsocks5/tool"
 	"github.com/codahale/chacha20"
+	"golang.org/x/crypto/poly1305"
 	"io"
 	"log"
 	"net"
@@ -51,31 +51,29 @@ func main() {
 }
 
 func handleRequest(conn net.Conn) {
-	go func ()  {
-		defer conn.Close()
+	defer conn.Close()
 
-		timeCookie := tool.GetTimeCookie()
-		initKey := sha256.Sum256([]byte(passwd+timeCookie))
-		nonce := sha512.Sum512([]byte(timeCookie + passwd))
+	timeCookie := tool.GetTimeCookie()
+	initKey := sha256.Sum256([]byte(passwd + timeCookie))
+	nonce := sha512.Sum512([]byte(timeCookie + passwd))
 
-		es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
-		ds, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
-		if err != nil {
-			log.Println("Error chacha20 init:  ", err)
-			return
-		}
+	es, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
+	ds, err := chacha20.NewXChaCha(initKey[:], nonce[:XNonceSize])
+	if err != nil {
+		log.Println("Error chacha20 init:  ", err)
+		return
+	}
 
-		//random data head length
-		randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
-		if randomDataLen < 32767 {
-			randomDataLen = randomDataLen + 2984
-		}
+	//random data head length
+	randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
+	if randomDataLen < 32767 {
+		randomDataLen = randomDataLen + 2984
+	}
 
-		proxy(conn, es, ds, randomDataLen, &initKey)
-	}()
+	proxy(conn, es, ds, randomDataLen, &initKey)
 }
 
-func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream, randomDataLen int, key *[32]byte) {
+func proxy(conn net.Conn, encodeStm, decodeStm cipher.Stream, randomDataLen int, key *[32]byte) {
 	der, dew := cipherPipe.Pipe(decodeStm)
 	defer der.Close()
 	defer dew.Close()
@@ -87,7 +85,7 @@ func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream, randomDataLen int
 
 	// read random data head
 	var ri = 0
-	var randomdata = make([]byte, randomDataLen + poly1305.TagSize)
+	var randomdata = make([]byte, randomDataLen+poly1305.TagSize)
 	for ri < (randomDataLen + poly1305.TagSize) {
 		r, err := der.Read(randomdata[ri:])
 		if err != nil {
@@ -97,7 +95,7 @@ func proxy( conn net.Conn, encodeStm, decodeStm cipher.Stream, randomDataLen int
 	}
 
 	var mac [16]byte
-	copy(mac[:],randomdata[randomDataLen:])
+	copy(mac[:], randomdata[randomDataLen:])
 	if !poly1305.Verify(&mac, randomdata[:randomDataLen], key) {
 		log.Println("poly1305 mac verify error")
 		return

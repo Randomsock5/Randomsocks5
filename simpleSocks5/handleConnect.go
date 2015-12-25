@@ -37,19 +37,30 @@ func handleConnect(wd io.Writer, rd io.Reader, dest *AddrSpec) error {
 	}
 
 	// Start proxying
-	var finish sync.WaitGroup
-	finish.Add(2)
-	go proxy( target, rd, finish)
-	go proxy( wd, target, finish)
+	var done sync.WaitGroup
+	finish := make(chan bool,4)
+
+	go proxy( target, rd, done, finish)
+	go proxy( wd, target, done, finish)
 
 	// Wait
-	finish.Wait()
+	done.Wait()
 	return nil
 }
 
-func proxy(dst io.Writer, src io.Reader, finish sync.WaitGroup) {
-	// Copy
-	_, err := io.Copy(dst, src)
-	fmt.Errorf("error : %v", err)
-	finish.Done()
+func proxy(dst io.WriteCloser, src io.Reader, done sync.WaitGroup, finish chan bool) {
+	done.Add(1)
+	copyeof := make(chan struct{})
+	go func ()  {
+		io.Copy(dst, src)
+		close(copyeof)
+	}()
+		
+	select {
+	case <- copyeof:
+	case <- finish:
+	}
+
+	finish <- true
+	done.Done()
 }

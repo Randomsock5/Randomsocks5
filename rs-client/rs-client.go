@@ -104,7 +104,6 @@ func handleRequest(conn net.Conn) {
 		log.Println("Create connection failed :", err)
 		return
 	}
-	defer pconn.Close()
 
 	der, dew := cipherPipe.Pipe(ds)
 	defer der.Close()
@@ -126,10 +125,12 @@ func handleRequest(conn net.Conn) {
 	copy(randomData[randomDataLen:], mac[:])
 
 	// Start proxying
-	var finish sync.WaitGroup
-	finish.Add(4)
+	var done sync.WaitGroup
+	finish := make(chan bool,4)
+	defer close(finish)
+
 	//Read the client data, encryption after sent to the server
-	go proxy(pconn, enr, finish)
+	go proxy(pconn, enr, done, finish)
 	// write random data head
 	var wi = 0
 	for wi < (randomDataLen + poly1305.TagSize) {
@@ -140,19 +141,31 @@ func handleRequest(conn net.Conn) {
 		wi += w
 	}
 
-	go proxy(enw, conn, finish)
+	go proxy(enw, conn, done, finish)
 
 	//Receive server data ,decryption after back to the client
-	go proxy(dew, pconn, finish)
-	go proxy(conn, der, finish)
+	go proxy(dew, pconn, done, finish)
+	go proxy(conn, der, done, finish)
 
 	// Wait
-	finish.Wait()
+	done.Wait()
 }
 
-func proxy(dst io.Writer, src io.Reader, finish sync.WaitGroup) {
-	io.Copy(dst, src)
-	finish.Done()
+func proxy(dst io.WriteCloser, src io.Reader, done sync.WaitGroup,finish chan bool) {
+	done.Add(1)
+	copyeof := make(chan struct{})
+	go func ()  {
+		io.Copy(dst, src)
+		close(copyeof)
+	}()
+
+	select {
+	case <- copyeof:
+	case <- finish:
+	}
+
+	finish <- true
+	done.Done()
 }
 
 func exist(filepath string) bool {
