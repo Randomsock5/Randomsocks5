@@ -5,12 +5,11 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"flag"
-	"github.com/Randomsock5/Randomsocks5/cipherPipe"
+	"github.com/Randomsock5/Randomsocks5/cipherConn"
 	"github.com/Randomsock5/Randomsocks5/simpleSocks5"
 	"github.com/Randomsock5/Randomsocks5/tool"
 	"github.com/codahale/chacha20"
 	"golang.org/x/crypto/poly1305"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -72,24 +71,15 @@ func handleRequest(conn net.Conn) {
 	}
 
 	proxy(conn, es, ds, randomDataLen, &initKey)
-	conn.SetDeadline(time.Now())
 }
 
-func proxy(conn net.Conn, encodeStm, decodeStm cipher.Stream, randomDataLen int, key *[32]byte) {
-	der, dew := cipherPipe.Pipe(decodeStm)
-	defer der.Close()
-	defer dew.Close()
-	enr, enw := cipherPipe.Pipe(encodeStm)
-	defer enr.Close()
-	defer enw.Close()
+func proxy(conn net.Conn, encode, decode cipher.Stream, randomDataLen int, key *[32]byte) {
+	cconn := cipherConn.NewCipherConn(decode,encode,conn)
 
-	go io.Copy(dew, conn)
-
-	// read random data head
 	var ri = 0
 	var randomdata = make([]byte, randomDataLen+poly1305.TagSize)
 	for ri < (randomDataLen + poly1305.TagSize) {
-		r, err := der.Read(randomdata[ri:])
+		r, err := cconn.Read(randomdata[ri:])
 		if err != nil {
 			return
 		}
@@ -103,7 +93,6 @@ func proxy(conn net.Conn, encodeStm, decodeStm cipher.Stream, randomDataLen int,
 		return
 	}
 
-	go io.Copy(conn, enr)
-
-	simpleSocks5.Socks5Handle(der, enw)
+	simpleSocks5.Socks5Handle(cconn)
+	time.Sleep(time.Second)
 }

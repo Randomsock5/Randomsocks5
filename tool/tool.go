@@ -40,7 +40,3 @@ func GetTimeCookie()string{
 	hour := now.UTC().Hour()
 	return strconv.Itoa(year)+mon.String()+strconv.Itoa(day)+strconv.Itoa(hour)
 }
-
-// func SetReadTimeOut(t int, conn net.Conn) {
-// 	conn.SetReadDeadline(time.Now().Add(time.Duration(t) * time.Second))
-// }

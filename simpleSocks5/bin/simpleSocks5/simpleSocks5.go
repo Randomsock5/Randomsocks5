@@ -23,11 +23,6 @@ func main (){
             log.Println("Error accepting:  ", err)
             continue
         }
-        go handleRequest(conn)
+        go simpleSocks5.Socks5Handle(conn)
     }
-}
-
-func handleRequest(conn net.Conn){
-    bufConnR := bufio.NewReader(conn)
-    simpleSocks5.Socks5Handle(bufConnR, conn)
 }

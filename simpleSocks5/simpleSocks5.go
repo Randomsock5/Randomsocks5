@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"log"
 	"io"
+	"net"
 )
 
-func Socks5Handle(rd io.Reader, wd io.Writer) {
+func Socks5Handle(conn net.Conn) {
 	// Read the version byte
 	version := []byte{0}
-	if _, err := rd.Read(version); err != nil {
+	if _, err := conn.Read(version); err != nil {
 		log.Printf("socks: Failed to get version byte: %v", err)
 		return
 	}
@@ -22,24 +23,24 @@ func Socks5Handle(rd io.Reader, wd io.Writer) {
 	}
 
 	// authenticate is used to handle connection authentication
-	_, err := readMethods(rd)
+	_, err := readMethods(conn)
 	if err != nil {
 		log.Printf("Failed to get auth methods: %v", err)
 		return
 	}
 
-	_, err = wd.Write([]byte{socks5Version, noAuth})
+	_, err = conn.Write([]byte{socks5Version, noAuth})
 	if err != nil {
 		log.Printf("Failed : %v", err)
 		return
 	}
-	handleRequest(rd, wd)
+	handleRequest(conn)
 }
 
-func handleRequest(rd io.Reader, wd io.Writer) {
+func handleRequest(conn net.Conn ) {
 	// Read the version byte
 	header := []byte{0, 0, 0}
-	if _, err := io.ReadAtLeast(rd, header, 3); err != nil {
+	if _, err := io.ReadAtLeast(conn, header, 3); err != nil {
 		log.Printf("Failed to get command version: %v", err)
 		return
 	}
@@ -51,10 +52,10 @@ func handleRequest(rd io.Reader, wd io.Writer) {
 	}
 
 	// Read in the destination address
-	dest, err := readAddrSpec(rd)
+	dest, err := readAddrSpec(conn)
 	if err != nil {
 		if err == unrecognizedAddrType {
-			if err := sendReply(wd, addrTypeNotSupported, nil); err != nil {
+			if err := sendReply(conn, addrTypeNotSupported, nil); err != nil {
 				log.Printf("Failed to send reply: %v", err)
 				return
 			}
@@ -67,7 +68,7 @@ func handleRequest(rd io.Reader, wd io.Writer) {
 	if dest.FQDN != "" {
 		addr, err := Resolve(dest.FQDN)
 		if err != nil {
-			if err := sendReply(wd, hostUnreachable, nil); err != nil {
+			if err := sendReply(conn, hostUnreachable, nil); err != nil {
 				log.Printf("Failed to send reply: %v", err)
 				return
 			}
@@ -80,12 +81,12 @@ func handleRequest(rd io.Reader, wd io.Writer) {
 	// Switch on the command
 	switch header[1] {
 	case connectCommand:
-		if err = handleConnect(wd, rd, dest); err != nil {
+		if err = handleConnect(conn, dest); err != nil {
 			log.Printf("Failed to connect: %s", err)
 		}
 		return
 	default:
-		if err := sendReply(wd, commandNotSupported, nil); err != nil {
+		if err := sendReply(conn, commandNotSupported, nil); err != nil {
 			log.Printf("Failed to send reply: %v", err)
 			return
 		}

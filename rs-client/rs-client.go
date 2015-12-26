@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"flag"
-	"github.com/Randomsock5/Randomsocks5/cipherPipe"
+	"github.com/Randomsock5/Randomsocks5/cipherConn"
 	"github.com/Randomsock5/Randomsocks5/tool"
 	"github.com/codahale/chacha20"
 	"golang.org/x/crypto/poly1305"
@@ -17,7 +17,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -87,8 +86,6 @@ func main() {
 }
 
 func handleRequest(conn net.Conn) {
-	defer conn.Close()
-
 	timeCookie := tool.GetTimeCookie()
 	initKey := sha256.Sum256([]byte(passwd + timeCookie))
 	nonce := sha512.Sum512([]byte(timeCookie + passwd))
@@ -105,14 +102,8 @@ func handleRequest(conn net.Conn) {
 		log.Println("Create connection failed :", err)
 		return
 	}
-	defer pconn.Close()
-
-	der, dew := cipherPipe.Pipe(ds)
-	defer der.Close()
-	defer dew.Close()
-	enr, enw := cipherPipe.Pipe(es)
-	defer enr.Close()
-	defer enw.Close()
+	cconn := cipherConn.NewCipherConn(ds,es,pconn)
+	defer cconn.Close()
 
 	randomDataLen, _ := tool.ReadInt(initKey[len(initKey)-2:])
 	if randomDataLen < 32767 {
@@ -128,51 +119,29 @@ func handleRequest(conn net.Conn) {
 
 	// Start proxying
 	finish := make(chan bool,4)
-	defer close(finish)
 
-	var done sync.WaitGroup
-	done.Add(4)
-
-	//Read the client data, encryption after sent to the server
-	go proxy(pconn, enr, done, finish)
 	// write random data head
-	var wi = 0
-	for wi < (randomDataLen + poly1305.TagSize) {
-		w, err := enw.Write(randomData[wi:])
-		if err != nil {
-			return
-		}
-		wi += w
+	_ , err = cconn.Write(randomData)
+	if err != nil {
+		log.Println("Connection write failed :", err)
+		return
 	}
 
-	go proxy(enw, conn, done, finish)
-
-	//Receive server data ,decryption after back to the client
-	go proxy(dew, pconn, done, finish)
-	go proxy(conn, der, done, finish)
+	go proxy(cconn,conn,finish)
+	go proxy(conn,cconn,finish)
 
 	// Wait
-	done.Wait()
-
-	conn.SetDeadline(time.Now())
-	pconn.SetDeadline(time.Now())
-}
-
-func proxy(dst io.Writer , src io.Reader, done sync.WaitGroup,finish chan bool) {
-	copyeof := make(chan struct{})
-	go func ()  {
-		io.Copy(dst, src)
-		close(copyeof)
-	}()
-
-	select {
-	case <- copyeof:
+	select{
 	case <- finish:
 	}
 
-	finish <- true
+	time.Sleep(2*time.Second)
+}
 
-	done.Done()
+func proxy(dst net.Conn, src net.Conn, finish chan bool) {
+	io.Copy(dst,src)
+	time.Sleep(time.Second)
+	finish <- true
 }
 
 func exist(filepath string) bool {
